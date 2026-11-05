@@ -43,12 +43,7 @@ class LedgerService(repo: AccountRepository):
         repo.save(updatedAccount)
     }
 
-  def transfer(
-                fromId: AccountId,
-                toId: AccountId,
-                money: Money
-              ): Either[LedgerError, (Account, Account)] =
-    // Упорядочиваем блокировки по ID для предотвращения Deadlock при встречных переводах
+  def transfer(fromId: AccountId, toId: AccountId, money: Money): Either[LedgerError, (Account, Account)] =
     val (firstLock, secondLock) =
       if fromId.value < toId.value then (fromId, toId)
       else (toId, fromId)
