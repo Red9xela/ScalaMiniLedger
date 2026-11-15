@@ -15,7 +15,7 @@ final case class Account(
                           balance: Money,
                           status: AccountStatus
                         )
-  
+
 
 enum LedgerError:
   case AccountNotFound(accountId: AccountId)
@@ -23,5 +23,7 @@ enum LedgerError:
   case InsufficientFunds(available: BigDecimal, required: BigDecimal)
   case CurrencyMismatch(expected: Currency, actual: Currency)
   case InvalidAmount(amount: BigDecimal)
+  case AccountAlreadyExists(accountId: AccountId)
+  case SameAccount(accountId: AccountId)
 
 
