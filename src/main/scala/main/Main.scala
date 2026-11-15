@@ -15,8 +15,10 @@ import service.LedgerService
   service.createAccount(bobId, "Bob", Currency.RUB)
 
   val result = for
-    _                   <- service.deposit(aliceId, Money(BigDecimal(1000), Currency.RUB))
-    (aliceAcc, bobAcc)  <- service.transfer(aliceId, bobId, Money(BigDecimal(350), Currency.RUB))
+    _ <- service.createAccount(aliceId, "Alice", Currency.RUB)
+    _ <- service.createAccount(bobId, "Bob", Currency.RUB)
+    _ <- service.deposit(aliceId, Money(BigDecimal(1000), Currency.RUB))
+    (aliceAcc, bobAcc) <- service.transfer(aliceId, bobId, Money(BigDecimal(350), Currency.RUB))
   yield (aliceAcc, bobAcc)
 
   result match

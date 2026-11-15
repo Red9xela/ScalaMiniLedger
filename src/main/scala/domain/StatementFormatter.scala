@@ -4,7 +4,7 @@ trait StatementFormatter[A]:
   def format(value: A): String
 
 object StatementFormatter:
-  given StatementFormatter[Account] with
+  given StatementFormatter[Account]:
     def format(account: Account): String =
       s"[Account ${account.id.value}] Owner: ${account.owner} | Balance: ${account.balance.amount} ${account.balance.currency} | Status: ${account.status}"
 

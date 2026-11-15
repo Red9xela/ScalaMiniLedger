@@ -1,6 +1,6 @@
 package domain
 
-opaque type AccountId <: AnyRef = String
+opaque type AccountId = String
 
 object AccountId:
   def apply(value: String): AccountId = value
