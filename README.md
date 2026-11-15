@@ -6,11 +6,12 @@
 
 ## Возможности
 
-- **Account Management** — создание банковских счетов с указанием владельца и валюты.
+- **Account Management** — создание банковских счетов с указанием владельца и валюты. Повторное создание счёта с тем же идентификатором возвращает ошибку.
 - **Deposits** — пополнение счетов с проверкой суммы, существования счёта, его статуса и валюты.
-- **Money Transfers** — перевод денежных средств между счетами с проверкой баланса, статуса и совместимости валют.
+- **Money Transfers** — перевод денежных средств между счетами с проверкой баланса, статуса и совместимости валют. Перевод на тот же счёт отклоняется ошибкой.
 - **Account Statements** — форматирование информации о счёте с использованием Type Classes.
 - **Error Handling** — обработка бизнес-ошибок через `Either`, без использования исключений для штатных ошибок.
+
 
 Поддерживаемые валюты: `RUB`, `USD`, `EUR`.
 
@@ -38,7 +39,7 @@
 | Type Classes | Абстракция форматирования через `StatementFormatter[A]` |
 | Given / Using | Предоставление и использование экземпляров Type Classes |
 | Extension Methods | Добавление метода `formatStatement` |
-| Concurrency | Использование `ConcurrentHashMap` и JVM-синхронизации |
+| Concurrency | `ConcurrentHashMap`, атомарный `putIfAbsent` и блокировки по счёту (по равенству идентификатора) |
 
 ## Architecture
 
@@ -65,6 +66,8 @@ src/
 │
 └── test/
     └── scala/
+        ├── domain/
+        │   └── StatementFormatterSpec.scala
         └── service/
             └── LedgerServiceSpec.scala
 ```
@@ -125,7 +128,6 @@ import service.LedgerService
 val repo = new InMemoryAccountRepository()
 val service = new LedgerService(repo)
 
-// Create accounts
 val aliceId = AccountId("acc-1")
 val bobId   = AccountId("acc-2")
 
@@ -134,15 +136,10 @@ service.createAccount(bobId, "Bob", Currency.RUB)
 
 // Deposit and transfer
 val result = for
-  _ <- service.deposit(
-    aliceId,
-    Money(BigDecimal(1000), Currency.RUB)
-  )
-  accounts <- service.transfer(
-    aliceId,
-    bobId,
-    Money(BigDecimal(350), Currency.RUB)
-  )
+  _ <- service.createAccount(aliceId, "Alice", Currency.RUB)
+  _ <- service.createAccount(bobId, "Bob", Currency.RUB)
+  _ <- service.deposit(aliceId, Money(BigDecimal(1000), Currency.RUB))
+  accounts <- service.transfer(aliceId, bobId, Money(BigDecimal(350), Currency.RUB))
 yield accounts
 
 // Handle result
@@ -168,17 +165,20 @@ result match
 
 `LedgerServiceSpec` покрывает следующие сценарии:
 
-- Успешное пополнение активного счёта.
-- Успешный перевод средств между счетами с одинаковой валютой.
-- Обработка ошибки недостаточного баланса (`InsufficientFunds`).
-- Обработка несовпадения валют (`CurrencyMismatch`).
-- Конкурентные переводы между двумя счетами в противоположных направлениях.
-- Форматирование выписки по счёту с использованием `StatementFormatter`.
+- Создание счёта и ошибка `AccountAlreadyExists` при повторном создании (баланс не сбрасывается).
+- Пополнение: успешное, `InvalidAmount`, `AccountNotFound`, `CurrencyMismatch`, `AccountNotActive` (Frozen и Closed).
+- Перевод: успешный, `InsufficientFunds`, `CurrencyMismatch`, `InvalidAmount`, `AccountNotFound`, `AccountNotActive`, `SameAccount`.
+- Неизменность балансов при неудачном переводе.
+- Согласованность балансов при параллельных пополнениях и переводах с идентификаторами, созданными как разные экземпляры `String`.
+
+`StatementFormatterSpec` проверяет форматирование выписки для активного и замороженного счёта.
 
 ## Project Scope
 
-Проект предназначен для изучения Scala 3 и принципов построения небольших сервисов с бизнес-логикой.
+Известные ограничения:
 
-Текущая реализация использует in-memory хранилище. Данные не сохраняются после завершения приложения.
-
-Это учебная реализация, а не готовая банковская система. Используемые механизмы синхронизации требуют дальнейшей проверки и усиления перед применением в production-системах.
+- Перевод выполняется двумя последовательными операциями `save`, поэтому не атомарен: параллельное чтение может увидеть промежуточное состояние.
+- Карта блокировок растёт вместе с числом счетов и не очищается.
+- Суммы не округляются и не ограничиваются по числу знаков после запятой.
+- Идентификатор счёта и имя владельца не проверяются на пустоту.
+- Нет журнала операций: хранится только текущий баланс.
